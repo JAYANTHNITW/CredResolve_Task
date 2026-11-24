@@ -8,6 +8,7 @@ from smartdialer.allocator import Allocator, InvalidPermit, wait_ms
 from smartdialer.db import tx
 from smartdialer.event_handler import handle_event
 from smartdialer.pacing import ProgressivePacing
+from smartdialer.recovery import Recovery
 from smartdialer.safety import ProviderCapacity, SafetyController, Snapshot
 
 
@@ -42,6 +43,14 @@ class Dispatcher:
             lease_ms=lease_ms,
             backoff=backoff,
         )
+        self.recovery = Recovery(
+            conn,
+            campaign_id,
+            clock,
+            router.providers,
+            heartbeat_ttl_ms=heartbeat_ttl_ms,
+        )
+        self._next_sweep = clock.now_ms() + 1000
         for provider in router.providers:
             provider.set_event_sink(self._on_event)
 
@@ -79,6 +88,10 @@ class Dispatcher:
             )
 
     def tick(self):
+        now = self.clock.now_ms()
+        if now >= self._next_sweep:
+            self.recovery.sweep()
+            self._next_sweep = now + 1000
         snapshot = self.snapshot()
         decision = self.safety.evaluate(
             self.pacing.request(snapshot), snapshot, self.clock.now_ms()

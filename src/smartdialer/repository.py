@@ -376,3 +376,91 @@ def consume_permit(conn, token, cid, count, now):
         ).rowcount
         == 1
     )
+
+
+def get_agent(conn, agent_id):
+    return conn.execute("SELECT * FROM agents WHERE id=?", (agent_id,)).fetchone()
+
+
+def heartbeat(conn, agent_id, now):
+    return (
+        conn.execute(
+            """UPDATE agents SET last_heartbeat_at=?
+        WHERE id=? AND state!='OFFLINE' AND last_heartbeat_at<=?""",
+            (now, agent_id, now),
+        ).rowcount
+        == 1
+    )
+
+
+def change_presence(conn, agent, target, now):
+    """Defer busy-agent requests to release; guard both idle and busy assignments."""
+    if agent["current_call_id"] is not None:
+        return (
+            conn.execute(
+                """UPDATE agents SET pending_state=?,version=version+1
+            WHERE id=? AND state=? AND current_call_id=? AND version=?""",
+                (
+                    target,
+                    agent["id"],
+                    agent["state"],
+                    agent["current_call_id"],
+                    agent["version"],
+                ),
+            ).rowcount
+            == 1
+        )
+    return (
+        conn.execute(
+            """UPDATE agents SET state=?,pending_state=NULL,wrap_up_until=NULL,
+        available_since=CASE WHEN ?='AVAILABLE' THEN ? END,version=version+1
+        WHERE id=? AND state=? AND current_call_id IS NULL AND version=?""",
+            (target, target, now, agent["id"], agent["state"], agent["version"]),
+        ).rowcount
+        == 1
+    )
+
+
+def agents_due(conn, campaign, now, cutoff):
+    return conn.execute(
+        """SELECT id FROM agents WHERE campaign_id=? AND state!='OFFLINE'
+        AND (last_heartbeat_at<=? OR (state='WRAP_UP' AND wrap_up_until<=?))""",
+        (campaign, cutoff, now),
+    ).fetchall()
+
+
+def calls_due(conn, campaign, now, ring_cutoff, quiet_cutoff):
+    return conn.execute(
+        """SELECT * FROM calls WHERE campaign_id=? AND (
+        (state='RESERVED' AND lease_expires_at<=?) OR
+        (state IN ('INITIATED','RINGING') AND initiated_at<=?) OR
+        (state IN ('ANSWERED','CONNECTED') AND answered_at<=? AND NOT EXISTS
+            (SELECT 1 FROM call_events e WHERE e.call_id=calls.id AND outcome='APPLIED' AND received_at>?)))""",
+        (campaign, now, ring_cutoff, quiet_cutoff, quiet_cutoff),
+    ).fetchall()
+
+
+def enqueue_hangup(conn, call):
+    if call["provider"] is not None:
+        conn.execute(
+            """INSERT INTO pending_hangups(call_id,provider,campaign_id) VALUES (?,?,?)
+            ON CONFLICT(call_id) DO NOTHING""",
+            (call["id"], call["provider"], call["campaign_id"]),
+        )
+
+
+def outstanding_hangups(conn, campaign):
+    return conn.execute(
+        "SELECT call_id,provider FROM pending_hangups WHERE campaign_id=?", (campaign,)
+    ).fetchall()
+
+
+def finish_hangup(conn, call_id):
+    conn.execute("DELETE FROM pending_hangups WHERE call_id=?", (call_id,))
+
+
+def record_agent_loss(conn, call, now):
+    conn.execute(
+        """INSERT INTO incidents(ts,call_id,kind,detail) VALUES (?,?,'ABANDONED_AGENT_LOST',?)""",
+        (now, call["id"], call["agent_id"]),
+    )

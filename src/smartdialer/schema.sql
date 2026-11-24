@@ -57,3 +57,6 @@ CREATE TABLE IF NOT EXISTS dialing_switches (
 
 CREATE INDEX IF NOT EXISTS idx_active_calls_provider ON calls(provider)
   WHERE state NOT IN ('COMPLETED','CANCELLED','FAILED');
+
+CREATE TABLE IF NOT EXISTS pending_hangups (
+  call_id TEXT PRIMARY KEY, provider TEXT NOT NULL, campaign_id TEXT NOT NULL);

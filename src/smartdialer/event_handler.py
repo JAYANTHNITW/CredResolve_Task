@@ -91,29 +91,38 @@ def handle_event(
     conn: Connection, ev: ProviderEvent, now_ms: int, *, wrap_up_ms: int = 30_000
 ) -> Outcome:
     with tx(conn):
-        event_id = repo.record_event(conn, ev, now_ms)
-        if event_id is None:
-            return Outcome.DUPLICATE
-        call = repo.get_call(conn, ev.call_id)
-        if call is None:
-            outcome = Outcome.UNKNOWN_CALL
-        else:
-            current = CallState(call["state"])
-            version = call["version"]
-            steps = plan_call_transition(current, ev.target_state)
-            for step in steps:
-                reason = (
-                    ev.fail_reason
-                    if step in (CallState.FAILED, CallState.CANCELLED)
-                    else None
-                )
-                if not repo.cas_call(
-                    conn, ev.call_id, current, version, step, now_ms, reason
-                ):
-                    raise RuntimeError("call changed during event transaction")
-                _apply_agent(conn, call, step, now_ms, wrap_up_ms)
-                _apply_borrower(conn, call, step, ev, now_ms)
-                current, version = step, version + 1
-            outcome = Outcome.APPLIED if steps else Outcome.STALE
-        repo.mark_event(conn, event_id, outcome)
-        return outcome
+        return apply_event(conn, ev, now_ms, wrap_up_ms=wrap_up_ms)
+
+
+def apply_event(
+    conn: Connection, ev: ProviderEvent, now_ms: int, *, wrap_up_ms: int = 30_000
+) -> Outcome:
+    """Compose the event and recovery bookkeeping in the caller's write transaction."""
+    if not conn.in_transaction:
+        raise RuntimeError("event processing requires an active transaction")
+    event_id = repo.record_event(conn, ev, now_ms)
+    if event_id is None:
+        return Outcome.DUPLICATE
+    call = repo.get_call(conn, ev.call_id)
+    if call is None:
+        outcome = Outcome.UNKNOWN_CALL
+    else:
+        current = CallState(call["state"])
+        version = call["version"]
+        steps = plan_call_transition(current, ev.target_state)
+        for step in steps:
+            reason = (
+                ev.fail_reason
+                if step in (CallState.FAILED, CallState.CANCELLED)
+                else None
+            )
+            if not repo.cas_call(
+                conn, ev.call_id, current, version, step, now_ms, reason
+            ):
+                raise RuntimeError("call changed during event transaction")
+            _apply_agent(conn, call, step, now_ms, wrap_up_ms)
+            _apply_borrower(conn, call, step, ev, now_ms)
+            current, version = step, version + 1
+        outcome = Outcome.APPLIED if steps else Outcome.STALE
+    repo.mark_event(conn, event_id, outcome)
+    return outcome

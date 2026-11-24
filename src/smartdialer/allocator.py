@@ -113,7 +113,8 @@ class Allocator:
                 backoff=self.backoff,
             )
         except ProviderTimeout:
-            # The persisted provider and lease allow recovery to reconcile an ambiguous dial.
+            # Recovery may have cancelled the assignment while the provider was placing it.
+            self._check_late_placement(reservation.call_id)
             return
         now = self.clock.now_ms()
         accepted = isinstance(result, Accepted)
@@ -126,3 +127,11 @@ class Allocator:
             None if accepted else FailReason.PROVIDER_ERROR,
         )
         handle_event(self.conn, event, now)
+        if accepted:
+            self._check_late_placement(reservation.call_id)
+
+    def _check_late_placement(self, call_id):
+        with tx(self.conn):
+            call = repo.get_call(self.conn, call_id)
+            if call["state"] in (CallState.CANCELLED, CallState.FAILED):
+                repo.enqueue_hangup(self.conn, call)
