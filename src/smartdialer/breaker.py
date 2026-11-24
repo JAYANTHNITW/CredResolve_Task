@@ -54,6 +54,11 @@ class CircuitBreaker:
             self._probe_in_flight = True
             return True
 
+    def cancel_probe(self) -> None:
+        """Return an unused half-open slot when placement admission declines it."""
+        with self._lock:
+            self._probe_in_flight = False
+
     def record(self, outcome: Outcome) -> None:
         with self._lock:
             if self._opened_at is not None:

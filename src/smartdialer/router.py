@@ -1,6 +1,6 @@
 """Route new calls by health and keep ambiguous placements bound to their provider."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from smartdialer.breaker import BreakerState, CircuitBreaker, Outcome
 from smartdialer.clock import Clock
@@ -33,7 +33,15 @@ class ProviderRouter:
                 return provider
         return None
 
-    def place_call(self, call_id: str, to: str, idempotency_key: str) -> PlaceResult:
+    def place_call(
+        self,
+        call_id: str,
+        to: str,
+        idempotency_key: str,
+        *,
+        before_attempt: Callable[[str, bool], bool] | None = None,
+        backoff: Callable[[int], None] | None = None,
+    ) -> PlaceResult:
         """Retry an ambiguous placement twice. Preserve its binding across later retries."""
         provider = self._bindings.get(idempotency_key)
         bound = provider is not None
@@ -44,6 +52,13 @@ class ProviderRouter:
         while provider is not None:
             breaker = self.breakers[provider.name]
             for attempt in range(3):
+                if before_attempt is not None and not before_attempt(
+                    provider.name, bound
+                ):
+                    if bound:
+                        raise ProviderTimeout(provider.name)
+                    breaker.cancel_probe()
+                    break
                 try:
                     result = provider.place_call(call_id, to, idempotency_key)
                 except ProviderTimeout:
@@ -52,6 +67,8 @@ class ProviderRouter:
                     bound = True
                     if attempt == 2:
                         raise
+                    if backoff is not None:
+                        backoff(25 * (attempt + 1))
                     continue
                 if isinstance(result, Accepted):
                     breaker.record(Outcome.SUCCESS)

@@ -42,3 +42,18 @@ CREATE TABLE IF NOT EXISTS incidents (            -- compliance incidents, e.g. 
 CREATE INDEX IF NOT EXISTS idx_agents_avail ON agents(campaign_id, state, available_since);
 CREATE INDEX IF NOT EXISTS idx_borrowers_next ON borrowers(campaign_id, status, next_attempt_at, priority);
 CREATE INDEX IF NOT EXISTS idx_calls_state_lease ON calls(state, lease_expires_at);
+
+CREATE TABLE IF NOT EXISTS safety_permits (
+  token TEXT PRIMARY KEY, campaign_id TEXT NOT NULL, approved INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_permit_expiry ON safety_permits(expires_at);
+
+CREATE TABLE IF NOT EXISTS placement_attempts (
+  provider TEXT NOT NULL, ts INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_placement_rate ON placement_attempts(provider, ts);
+
+CREATE TABLE IF NOT EXISTS dialing_switches (
+  scope TEXT PRIMARY KEY, stopped INTEGER NOT NULL CHECK(stopped IN (0,1)));
+
+CREATE INDEX IF NOT EXISTS idx_active_calls_provider ON calls(provider)
+  WHERE state NOT IN ('COMPLETED','CANCELLED','FAILED');
