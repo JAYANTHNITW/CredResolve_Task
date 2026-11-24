@@ -32,6 +32,16 @@ source .venv/bin/activate
 python -m pip install -e '.[dev]'
 ```
 
-Run `make test` or `python -m pytest -q`. A Windows MinGW installation can use `mingw32-make test`. Phase 0 has an empty test suite, so pytest reports zero collected tests and exits with status 5.
+Run `make test` or `python -m pytest -q`. A Windows MinGW installation can use `mingw32-make test`.
 
-The Makefile also defines `sim`, `load`, and `demo` for the simulator, load test, and scenario tests scheduled in [plan.md](plan.md).
+## Failure scenario demos
+
+Run `make demo` (Windows MinGW: `mingw32-make demo`) or `python -m pytest -s tests/scenarios` from the activated environment. Each demo prints elapsed virtual time and checks the resulting database and provider state.
+
+| Scenario | Timeline from a demo run |
+|---|---|
+| Worker crash | At 0 s A accepts a placement and the dispatcher process is killed before recording initiation. At 10.001 s the next worker polls A and resumes the call. At 24.001 s the borrower is done and A has placed exactly one call. |
+| Provider outage | At 2.250 s B rejects new calls and A accepts the next placement. At 3.450 s both breakers are open, two agents remain available, and failed borrowers have jittered retry deadlines. At 13.451 s polling recovers the lost completion and B accepts a recovery probe. |
+| Agent drop | At 0 s safety approves 100 calls. At 5.000 s 40 agents reach their heartbeat deadline. The 5.200 s tick approves 60 calls and marks 40 agents offline. |
+| Duplicate events | By 0.500 s the same answer notification has arrived five times. One delivery advances the agent and four return a duplicate outcome. |
+| Out-of-order events | Completion at 0.100 s applies the implied transitions. The answer at 0.200 s and ringing at 0.300 s are stale. The borrower is done and the agent is in wrap-up. |
