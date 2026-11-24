@@ -45,3 +45,9 @@ Run `make demo` (Windows MinGW: `mingw32-make demo`) or `python -m pytest -s tes
 | Agent drop | At 0 s safety approves 100 calls. At 5.000 s 40 agents reach their heartbeat deadline. The 5.200 s tick approves 60 calls and marks 40 agents offline. |
 | Duplicate events | By 0.500 s the same answer notification has arrived five times. One delivery advances the agent and four return a duplicate outcome. |
 | Out-of-order events | Completion at 0.100 s applies the implied transitions. The answer at 0.200 s and ringing at 0.300 s are stale. The borrower is done and the agent is in wrap-up. |
+
+## Progressive dialing simulation
+
+Run `make sim` to replay six eight-hour shifts using virtual time. For a shorter run, use `python -m smartdialer.simulator --seconds 900 --output short-run.md`. The simulator uses the same dispatcher, reservation transactions, safety checks, provider events and recovery sweeper as the demos.
+
+At a 20% answer rate, progressive dialing takes about five attempts per answer. With 20 seconds of ringing per attempt, 120 seconds of conversation and 30 seconds of wrap-up, scenario A measured 48.23% talk utilization. The clean-model estimate is 48% from `120 / (120 + 30 + 20 / 0.20)`. Predictive dialing could reclaim some of that waiting time by starting calls earlier. It requires a safety controller because several borrowers can answer before enough agents become available. See the [measured scenario results](docs/simulation-results.md) for utilization, pacing, safety decisions and abandoned calls.

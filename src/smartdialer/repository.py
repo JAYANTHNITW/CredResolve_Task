@@ -464,3 +464,80 @@ def record_agent_loss(conn, call, now):
         """INSERT INTO incidents(ts,call_id,kind,detail) VALUES (?,?,'ABANDONED_AGENT_LOST',?)""",
         (now, call["id"], call["agent_id"]),
     )
+
+
+def seed_campaign(conn, campaign, agents, borrowers, now, *, offline=False):
+    """Populate an empty simulation or benchmark campaign with synthetic identities."""
+    with tx(conn):
+        conn.executemany(
+            """INSERT INTO agents(id,campaign_id,state,available_since,last_heartbeat_at)
+            VALUES (?,?,?,?,?)""",
+            (
+                (
+                    f"{campaign}-a{i}",
+                    campaign,
+                    "OFFLINE" if offline else "AVAILABLE",
+                    None if offline else now,
+                    now,
+                )
+                for i in range(agents)
+            ),
+        )
+        conn.executemany(
+            """INSERT INTO borrowers(id,campaign_id,phone,status)
+            VALUES (?,?,?,'PENDING')""",
+            ((f"{campaign}-b{i}", campaign, "synthetic") for i in range(borrowers)),
+        )
+
+
+def simulation_observers(conn):
+    # Count actual CONNECTED transitions, including a skipped ANSWERED/COMPLETED
+    # sequence applied atomically between simulator samples.
+    conn.executescript("""
+        CREATE TEMP TABLE connects(call_id TEXT PRIMARY KEY);
+        CREATE TEMP TRIGGER observe_connect AFTER UPDATE OF state ON agents
+        WHEN NEW.state='CONNECTED' AND OLD.state!='CONNECTED'
+        BEGIN INSERT INTO connects VALUES (NEW.current_call_id); END;
+        CREATE TEMP TABLE online_agents(id TEXT PRIMARY KEY);
+        INSERT INTO online_agents SELECT id FROM agents;
+    """)
+
+
+def simulation_heartbeats(conn, now):
+    conn.execute(
+        """UPDATE agents SET last_heartbeat_at=? WHERE id IN
+        (SELECT id FROM online_agents) AND state!='OFFLINE'""",
+        (now,),
+    )
+
+
+def simulation_drop(conn, count):
+    conn.execute(
+        "DELETE FROM online_agents WHERE id IN (SELECT id FROM online_agents ORDER BY id LIMIT ?)",
+        (count,),
+    )
+
+
+def simulation_agent_counts(conn):
+    return dict(conn.execute("SELECT state,COUNT(*) FROM agents GROUP BY state"))
+
+
+def simulation_totals(conn):
+    calls = conn.execute("""SELECT COUNT(initiated_at),COUNT(answered_at),
+        (SELECT COUNT(*) FROM connects) FROM calls""").fetchone()
+    incidents = dict(conn.execute("SELECT kind,COUNT(*) FROM incidents GROUP BY kind"))
+    unassigned = conn.execute("""SELECT COUNT(*) FROM calls WHERE answered_at IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM connects WHERE connects.call_id=calls.id)""").fetchone()[
+        0
+    ]
+    return tuple(calls), unassigned, incidents.get("ABANDONED_AGENT_LOST", 0)
+
+
+def simulation_pacing(conn, start, end):
+    return tuple(
+        conn.execute(
+            """SELECT avg(requested),min(requested),max(requested),
+        avg(approved),min(approved),max(approved) FROM safety_decisions WHERE ts>=? AND ts<?""",
+            (start, end),
+        ).fetchone()
+    )
