@@ -6,7 +6,8 @@ from sqlite3 import Connection, Row
 from uuid import uuid4
 
 from smartdialer.db import tx
-from smartdialer.models import AgentState, CallState
+from smartdialer.models import AgentState, BorrowerStatus, CallState, FailReason
+from smartdialer.providers.base import ProviderEvent
 
 
 @dataclass(frozen=True)
@@ -158,3 +159,119 @@ def campaign_snapshot(conn: Connection, campaign_id: str) -> CampaignSnapshot:
         else:
             snapshot.calls_by_state[CallState(state)] = count
     return snapshot
+
+
+def record_event(conn: Connection, event: ProviderEvent, now_ms: int) -> int | None:
+    cur = conn.execute(
+        """INSERT INTO call_events
+           (call_id, provider, provider_event_id, type, occurred_at, received_at, outcome)
+           VALUES (?, ?, ?, ?, ?, ?, 'PROCESSING')
+           ON CONFLICT(provider, provider_event_id) DO NOTHING""",
+        (
+            event.call_id,
+            event.provider,
+            event.provider_event_id,
+            event.type,
+            event.occurred_at,
+            now_ms,
+        ),
+    )
+    return cur.lastrowid if cur.rowcount == 1 else None
+
+
+def mark_event(conn: Connection, event_id: int, outcome: str) -> None:
+    if (
+        conn.execute(
+            "UPDATE call_events SET outcome=? WHERE id=? AND outcome='PROCESSING'",
+            (outcome, event_id),
+        ).rowcount
+        != 1
+    ):
+        raise RuntimeError("event audit row changed during processing")
+
+
+_TIMESTAMP_COLUMN = {
+    CallState.INITIATED: "initiated_at",
+    CallState.RINGING: "ringing_at",
+    CallState.ANSWERED: "answered_at",
+    CallState.COMPLETED: "ended_at",
+    CallState.FAILED: "ended_at",
+    CallState.CANCELLED: "ended_at",
+}
+
+
+def cas_call(
+    conn: Connection,
+    call_id: str,
+    current: CallState,
+    version: int,
+    target: CallState,
+    now_ms: int,
+    reason: FailReason | None = None,
+) -> bool:
+    column = _TIMESTAMP_COLUMN.get(target)
+    timestamp = f", {column}=:now" if column else ""
+    # An allocator's RESERVED -> INITIATED write can lose to an early RINGING
+    # event. An already-advanced call means placement succeeded.
+    result = conn.execute(
+        f"""UPDATE calls SET state=:target, version=version+1, fail_reason=:reason{timestamp}
+            WHERE id=:id AND state=:current AND version=:version""",
+        {
+            "target": target,
+            "reason": reason,
+            "now": now_ms,
+            "id": call_id,
+            "current": current,
+            "version": version,
+        },
+    )
+    return result.rowcount == 1
+
+
+def advance_assigned_agent(
+    conn: Connection, call: Row, current: AgentState, target: AgentState
+) -> bool:
+    return (
+        conn.execute(
+            """UPDATE agents SET state=?, version=version+1
+           WHERE id=? AND state=? AND current_call_id=?""",
+            (target, call["agent_id"], current, call["id"]),
+        ).rowcount
+        == 1
+    )
+
+
+def finish_agent_call(conn: Connection, call: Row, wrap_up_until: int) -> bool:
+    return (
+        conn.execute(
+            """UPDATE agents SET state=COALESCE(pending_state,'WRAP_UP'),
+               wrap_up_until=CASE WHEN pending_state IS NULL THEN ? END,
+               pending_state=NULL, current_call_id=NULL, available_since=NULL, version=version+1
+           WHERE id=? AND state='CONNECTED' AND current_call_id=?""",
+            (wrap_up_until, call["agent_id"], call["id"]),
+        ).rowcount
+        == 1
+    )
+
+
+def assigned_borrower(conn: Connection, call: Row) -> Row:
+    row = conn.execute(
+        "SELECT attempts,max_attempts FROM borrowers WHERE id=? AND active_call_id=?",
+        (call["borrower_id"], call["id"]),
+    ).fetchone()
+    if row is None:
+        raise RuntimeError("borrower assignment changed during call")
+    return row
+
+
+def advance_assigned_borrower(
+    conn: Connection, call: Row, current: BorrowerStatus, target: BorrowerStatus
+) -> bool:
+    return (
+        conn.execute(
+            """UPDATE borrowers SET status=?, active_call_id=CASE WHEN ?='DONE' THEN NULL ELSE active_call_id END
+           WHERE id=? AND status=? AND active_call_id=?""",
+            (target, target, call["borrower_id"], current, call["id"]),
+        ).rowcount
+        == 1
+    )
