@@ -104,6 +104,7 @@ def test_busy_writer_retry(tmp_path, conn, monkeypatch, release):
                 pytest.fail("writer should still be locked")
             assert error.value.sqlite_errorcode == sqlite3.SQLITE_BUSY
             assert len(sleeps) == 2
+        assert contender.busy_retries == len(sleeps)
         assert not contender.in_transaction
 
 

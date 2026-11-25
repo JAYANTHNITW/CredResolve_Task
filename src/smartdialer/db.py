@@ -9,6 +9,10 @@ from importlib.resources import files
 from os import PathLike
 
 
+class WorkerConnection(sqlite3.Connection):
+    busy_retries: int = 0
+
+
 def _execute_with_retry(conn: sqlite3.Connection, statement: str) -> None:
     for attempt in range(3):
         try:
@@ -18,11 +22,13 @@ def _execute_with_retry(conn: sqlite3.Connection, statement: str) -> None:
             code = getattr(exc, "sqlite_errorcode", 0)
             if (code & 0xFF) != sqlite3.SQLITE_BUSY or attempt == 2:
                 raise
+            if isinstance(conn, WorkerConnection):
+                conn.busy_retries += 1
             time.sleep(random.uniform(0.001, 0.010))
 
 
-def connect(path: str | PathLike[str]) -> sqlite3.Connection:
-    conn = sqlite3.connect(path, isolation_level=None)
+def connect(path: str | PathLike[str]) -> WorkerConnection:
+    conn = sqlite3.connect(path, isolation_level=None, factory=WorkerConnection)
     try:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout=5000")
