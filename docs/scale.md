@@ -16,3 +16,24 @@ SQLite serializes writers. More agents provide more batches to amortize fixed co
 At 1,000 agents, dispatch throughput was 0.93 times the 100-agent result. Reserve p99 moved from 171.23 ms to 556.40 ms. Each replay applied the same number of events. The larger wave achieved 1.20 times the smaller wave's throughput.
 
 A fixed business clock keeps agents fresh and the calling window open for both dispatch runs. Throughput and latency use the monotonic performance counter. These are short saturation waves on one host. The p99 estimate is especially sensitive to sample size at 100 agents.
+
+## Scaling beyond the benchmark
+
+| Agent count | First pressure to investigate | Evidence or assumption | Engineering response |
+|---|---|---|---|
+| 100 | Reservation latency during bursts | All 100 reservations succeeded. Ten latency samples give a coarse p99. | Measure longer runs with representative campaign traffic before changing storage. |
+| 1,000 | Contention for SQLite's writer | Eight processes share a writer for reservations, safety audits and events. The measured reservation p99 rose from 171 to 556 ms. | Batch reservations. For more write concurrency, move to PostgreSQL and select candidates with `FOR UPDATE SKIP LOCKED`. |
+| 10,000 (projection) | Agent heartbeat writes | One heartbeat per agent every five seconds implies 2,000 updates/s on the agents table. For comparison, a workload of one reservation per agent per minute gives about 167 reservations/s and six events per call gives about 1,000 events/s. | Isolate presence in a narrow table or TTL store, with a freshness check at reservation. Keep assignment changes transactional. |
+| Above 10,000 (projection) | Workers scanning the same available agents | More dispatchers can compete for the same ordered candidate set. | Partition by campaign or agent hash and lease each shard to a worker. |
+| Any scale | Provider concurrency and calls-per-second limits | Provider quotas can bind before database throughput does. | Preserve per-provider admission checks. Budget traffic across healthy providers and consider a shared token bucket for burst control. |
+
+The heartbeat estimate describes a write-rate scenario. A five-second heartbeat interval would leave no margin for scheduling or network delay with the current five-second expiry threshold. Measure interarrival jitter and choose the interval and expiry together.
+
+### What remains uncertain
+
+- **Provider ambiguity.** Safe recovery depends on the provider's idempotency retention period and when a status lookup becomes authoritative. Test delayed acknowledgements, stale status responses and retry windows against a real provider before treating an unknown call as safe to cancel.
+- **Heartbeat expiry.** Short expiry prevents assignments to missing agents sooner, but a delayed heartbeat can disconnect a live borrower. Measure false offline transitions alongside time to stop new dials.
+
+### With another week
+
+Prototype Erlang-style predictive pacing behind the existing Safety Controller with abandonment feedback. Benchmark a PostgreSQL reservation backend against the same race tests, validate placement and reconciliation with a real Plivo adapter, and add property-based event-handler tests over crashes, retries and reordered delivery.

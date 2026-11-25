@@ -240,6 +240,12 @@ def main():
     )
     report = "\n".join(lines) + "\n"
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    # Refresh measurements while retaining the maintained capacity-planning notes.
+    if args.output.is_file():
+        heading = "\n## Scaling beyond the benchmark\n"
+        _, marker, notes = args.output.read_text(encoding="utf-8").partition(heading)
+        if marker:
+            report += marker + notes
     args.output.write_text(report, encoding="utf-8")
     print(report)
 
