@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Call room · SmartDialer</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f4ec;color:#162d28;font:16px/1.35 system-ui,sans-serif}main{max-width:1480px;margin:auto;padding:16px 24px}header,.row,.tools,.numbers,.flow,.foot,.legend{display:flex;align-items:center;gap:9px}header{justify-content:space-between;margin-bottom:12px}h1,h2,p{margin:0}h1{font:700 clamp(25px,3vw,40px)/1 Georgia,serif;letter-spacing:-1px}h2{font-size:18px;margin-bottom:8px}header small{font-size:13px;letter-spacing:1.3px;font-weight:750}button,select{font:inherit;border:1px solid #9aa9a1;border-radius:7px;background:#fff;color:#18372f;padding:6px 11px;cursor:pointer}button:hover{background:#e8efe8}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #2672ae}button:disabled{cursor:default;opacity:.55}#start{background:#185d49;color:white}.panel{background:#fffef9;border:1px solid #cbd3c8;border-radius:12px;padding:12px 15px}.numbers{gap:0;background:#173c33;color:white;border-radius:12px;margin-bottom:10px;padding:10px 0}.numbers div{flex:1;padding:0 18px;border-right:1px solid #527064}.numbers div:last-child{border:0}.numbers strong{font:700 30px/1.15 Georgia,serif;display:block}.numbers span{color:#e2eee1;font-size:14px}.pipeline{position:relative;margin-bottom:10px;overflow:hidden}.flow{align-items:stretch;gap:20px}.stage{position:relative;flex:1;background:#eaf0e6;border-radius:7px;padding:8px 10px}.stage b{display:block}.stage span{font-size:14px}.stage:not(:last-child):after{content:'→';position:absolute;right:-18px;top:35%;color:#4b685d}.dot{position:absolute;left:5%;bottom:3px;width:8px;height:8px;background:#bb541e;border-radius:50%;animation:travel .8s linear both;pointer-events:none}@keyframes travel{to{left:94%}}.grid{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:10px}.agents{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}.person{text-align:center;border-radius:6px;background:#f1f3ed;padding:3px 0;font-size:13px;font-weight:650}.icon{display:block;position:relative;width:30px;height:30px;margin:0 auto 2px}.icon:before,.icon:after{content:'';position:absolute;background:var(--ink);left:50%;transform:translateX(-50%);border:1px solid #24362f55}.icon:before{width:11px;height:11px;border-radius:50%;top:1px}.icon:after{width:23px;height:14px;border-radius:12px 12px 4px 4px;bottom:1px}.AVAILABLE{--ink:#26975d}.RESERVED{--ink:#f0c837}.DIALING{--ink:#e47729}.CONNECTED{--ink:#237dc3}.WRAP_UP{--ink:#8757ab}.PAUSED{--ink:#a6ada8}.OFFLINE{--ink:#27332e}.legend{flex-wrap:wrap;gap:4px 10px;margin-top:8px;font-size:12px}.legend span:before{content:'';display:inline-block;width:9px;height:9px;background:var(--ink);border-radius:50%;margin-right:4px}.stats{display:flex;justify-content:space-between;gap:6px;font-size:13px}.stats b{font-size:19px}.scroll{overflow:auto;max-height:128px;margin-top:5px}.item{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid #e1e5dc;font-size:14px}.empty{color:#52675b;font-size:14px}.safety{background:#edf1d8}.safety strong{font-size:20px}.safety p{margin:8px 0}#decision{background:#254e43;color:white;font-size:13px;font-weight:750;letter-spacing:.8px;border-radius:5px;padding:4px 7px}.lower{margin-top:10px;display:grid;grid-template-columns:1.05fr 2fr;gap:10px}.feed{height:132px;overflow:auto}.feed p{font-size:14px;padding:4px 0;border-bottom:1px solid #dde4db}.feed time{font-variant-numeric:tabular-nums;font-size:12px;color:#52675b;margin-right:7px}.tools,.foot{flex-wrap:wrap}.tools button{font-size:14px;padding:6px 9px}.foot{margin-top:10px;gap:10px 22px}.foot label{font-size:14px;font-weight:600}.foot input[type=range]{width:95px;vertical-align:middle;accent-color:#23624e}.tools [aria-pressed=true]{background:#dbe9ce;border-color:#4c734f}.why{font-size:14px;margin-top:7px}#notice{color:#9b321e}.row{flex-wrap:wrap}button,select{touch-action:manipulation}@media(max-width:950px){main{padding:12px}.grid{grid-template-columns:1fr 1fr}.safety{grid-column:1/-1}.lower{grid-template-columns:1fr 1.6fr}}@media(max-width:680px){header{align-items:flex-start;flex-direction:column}.numbers{flex-wrap:wrap}.numbers div{min-width:30%;padding:6px 10px}.flow{overflow:auto}.stage{min-width:140px}.grid,.lower{grid-template-columns:1fr}.foot{align-items:flex-start}.safety{grid-column:auto}}@media(prefers-reduced-motion:reduce){.dot{animation:none;display:none}}
+</style>
+<main>
+<header><div><small>SMARTDIALER</small><h1>The call room</h1></div><div class="row"><span id="status" role="status">Connecting…</span><button id="start" data-action="start">▶ Start</button><button id="pause" data-action="pause">Ⅱ Pause</button><button data-action="reset">↺ Reset</button><label>Speed <select id="speed"><option value="1">1×</option><option value="5">5×</option><option value="20">20×</option></select></label></div></header>
+<div class="numbers"><div><strong id="utilization">—</strong><span>Time spent talking</span></div><div><strong id="started">—</strong><span>Calls started</span></div><div><strong id="answered">—</strong><span>Answered</span></div><div><strong id="connected">—</strong><span>Connected to an agent</span></div><div><strong id="abandoned">—</strong><span>Abandoned calls</span></div></div>
+<section class="panel pipeline" id="pipeline"><h2>How a call begins</h2><div class="flow">
+<div class="stage"><b>☷ Campaign</b><span>Holds the list of people to call.</span></div>
+<div class="stage"><b>◴ Pacing Engine</b><span>Counts who is ready to talk.</span></div>
+<div class="stage"><b>✓ Safety Controller</b><span>Checks how many calls are safe.</span></div>
+<div class="stage"><b>⇄ Call Allocator</b><span>Saves one agent for each call.</span></div>
+<div class="stage"><b>☎ Phone Company</b><span>Makes the phone ring.</span></div></div></section>
+<div class="grid"><section class="panel"><h2>Our agents</h2><div class="agents" id="agents"></div><div class="legend" id="legend"></div></section>
+<section class="panel"><h2>Calls in flight</h2><div class="stats"><span><b id="waiting">—</b> waiting</span><span><b id="finished">—</b> finished</span><span><b id="failed">—</b> failed</span></div><div class="scroll" id="calls"></div></section>
+<section class="panel safety"><h2>Safety Controller</h2><span id="decision">WAITING</span><p><strong id="requested">—</strong> requested · <strong id="approved">—</strong> allowed</p><p id="reason"></p></section></div>
+<div class="lower"><section class="panel"><h2>What just happened?</h2><div class="feed" id="feed"></div></section>
+<section class="panel"><h2>Try a surprise</h2><div class="tools">
+<button id="outage" data-action="outage">☎ Phone company B breaks</button><button id="slow" data-action="slow">◷ Make phone line slow</button><button id="leave" data-action="leave">↗ 40% of agents leave</button>
+<button data-action="duplicate">⧉ Send duplicate messages</button><button data-action="reorder">⇄ Send messages in wrong order</button><button data-action="crash">⚡ Crash a worker</button></div>
+<div class="foot"><label>Answer rate <input id="answer_rate" type="range" min="0" max="100"><output id="rate"></output></label><label>Average talk time <input id="talk_seconds" type="range" min="30" max="300"><output id="talk"></output></label><label><input id="toggle" type="checkbox"> Why?</label></div><p hidden class="why" id="why"></p></section></div><p id="notice" role="alert"></p>
+</main>
+<script>
+const el=id=>document.getElementById(id);
+const text=(id,value)=>{if(el(id).textContent!==String(value))el(id).textContent=value};
+function node(tag,cls,content){const n=document.createElement(tag);n.className=cls;if(content!==undefined)n.textContent=content;return n}
+const seen=new Map();
+function list(id,data,build,empty){const key=JSON.stringify(data);if(seen.get(id)===key)return;seen.set(id,key);el(id).replaceChildren(...data.map(build));if(!data.length&&empty)el(id).append(node('p','empty',empty))}
+let previous=null, actions=Promise.resolve(),version=0;
+function render(s){
+ if(previous?.session===s.session){for(let i=previous.metrics.started;i<s.metrics.started;i++){const dot=node('i','dot');dot.style.animationDelay=((i-previous.metrics.started)*45)+'ms';el('pipeline').append(dot);setTimeout(()=>dot.remove(),1000+(i-previous.metrics.started)*45)}}
+ previous=s;
+ for(const [k,v] of Object.entries(s.metrics))text(k,k==='utilization'?v+'%':v);
+ for(const k of ['waiting','finished','failed'])text(k,s[k]);
+ text('status',s.running?'● Running':'Ⅱ Paused');el('start').disabled=s.running;el('pause').disabled=!s.running;
+ text('decision',s.safety.action);for(const k of ['requested','approved','reason'])text(k,s.safety[k]);
+ list('agents',s.agents,a=>{const n=node('div','person '+a.state);n.title=a.name+' · '+a.label;n.setAttribute('aria-label',n.title);n.append(node('i','icon'),document.createTextNode(a.name));return n});
+ list('legend',Object.entries(s.legend),([k,v])=>node('span',k,v));
+ list('calls',s.calls,c=>{const n=node('div','item');n.append(node('b','',c.agent),node('span','',c.label));return n},'No calls in flight.');
+ list('feed',s.feed,f=>{const n=node('p','');n.append(node('time','',f.time),document.createTextNode(f.text));return n},'Press Start to watch the first calls.');
+ for(const k of ['speed','answer_rate','talk_seconds'])if(document.activeElement!==el(k))el(k).value=s[k];
+ text('rate',s.answer_rate+'%');text('talk',s.talk_seconds+' s');text('why',s.why);
+ text('outage',s.outage?'☎ Restore company B':'☎ Phone company B breaks');text('slow',s.slow?'◷ Restore line speed':'◷ Make phone line slow');
+ for(const k of ['outage','slow'])el(k).setAttribute('aria-pressed',String(s[k]));el('leave').disabled=s.left;
+}
+async function read(url,opts){const r=await fetch(url,opts);const s=await r.json();if(!r.ok)throw Error(s.error||'Could not reach the demo.');return s}
+function send(type,value){version++;actions=actions.then(async()=>{render(await read('/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,value})}));text('notice','')}).catch(e=>text('notice',e.message))}
+document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>send(b.dataset.action));
+for(const k of ['speed','answer_rate','talk_seconds'])el(k).onchange=e=>send(k,Number(e.target.value));
+el('toggle').onchange=e=>el('why').hidden=!e.target.checked;
+async function poll(){const v=version;try{await actions;const s=await read('/state');if(v===version){render(s);text('notice','')}}catch(e){text('notice','Connection lost. Trying again…')}finally{setTimeout(poll,300)}}poll();
+</script>
+</html>

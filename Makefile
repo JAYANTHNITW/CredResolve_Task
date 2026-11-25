@@ -11,3 +11,7 @@ load:
 
 demo:
 	python -m pytest -s tests/scenarios
+
+.PHONY: ui
+ui:
+	python -m smartdialer.ui.server

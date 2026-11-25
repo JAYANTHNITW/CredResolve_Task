@@ -90,3 +90,9 @@ Run `make load` or `python scripts/loadtest.py` from the activated environment. 
 7. Pacing can request capacity. Only the Safety Controller can issue a `Permit`, and only the allocator can reserve and place calls with one.
 8. Fail closed. Reject a request whenever the Safety Controller cannot establish that it is safe.
 9. Document the problem a new technology solves before adding it.
+
+## Demo UI (optional)
+
+Run `make ui` from the activated environment and open [the local demo](http://localhost:8000). On Windows use `mingw32-make ui` or `python -m smartdialer.ui.server`. Press Start to watch agents pick up calls, change the speed, or try a surprise and open **Why?** for an explanation. Pause freezes demo time. Reset creates a fresh campaign.
+
+The viewer is separate from the core system. It runs an in-memory campaign with mock phone companies and the real dispatch and recovery code. Every browser tab shares this local demo. Abandoned calls normally stay at zero; an agent leaving during a conversation can produce a counted abandonment. Ctrl+C stops the server.
